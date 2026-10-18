@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Frontend build output
+frontend/.next/
+frontend/out/
+
 # Distribution / packaging
 .Python
 build/
@@ -173,4 +177,8 @@ cython_debug/
 .pypirc
 
 .DS_Store
+backend/data/*.db
+backend/data/*.db-journal
 
+# .vscode settings
+.vscode/settings.json

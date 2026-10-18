@@ -1,0 +1,81 @@
+{
+  "database": {
+    "name": "project_management_mvp",
+    "engine": "sqlite",
+    "version": 1
+  },
+  "tables": {
+    "users": {
+      "description": "Authenticated users for the MVP and future multi-user expansion.",
+      "columns": [
+        { "name": "id", "type": "TEXT", "primary_key": true },
+        { "name": "username", "type": "TEXT", "unique": true, "not_null": true },
+        { "name": "password_hash", "type": "TEXT", "not_null": true },
+        { "name": "created_at", "type": "TEXT", "not_null": true }
+      ]
+    },
+    "auth_sessions": {
+      "description": "Hashed, expiring server-side login sessions that can be revoked on logout.",
+      "columns": [
+        { "name": "token_hash", "type": "TEXT", "primary_key": true },
+        { "name": "user_id", "type": "TEXT", "not_null": true, "references": "users.id" },
+        { "name": "expires_at", "type": "INTEGER", "not_null": true }
+      ]
+    },
+    "boards": {
+      "description": "One active board per user for the MVP.",
+      "columns": [
+        { "name": "id", "type": "TEXT", "primary_key": true },
+        { "name": "user_id", "type": "TEXT", "not_null": true, "references": "users.id" },
+        { "name": "title", "type": "TEXT", "not_null": true },
+        { "name": "created_at", "type": "TEXT", "not_null": true },
+        { "name": "updated_at", "type": "TEXT", "not_null": true }
+      ]
+    },
+    "board_columns": {
+      "description": "Fixed Kanban columns for each board, with editable titles and order.",
+      "columns": [
+        { "name": "id", "type": "TEXT", "primary_key": true },
+        { "name": "board_id", "type": "TEXT", "not_null": true, "references": "boards.id" },
+        { "name": "title", "type": "TEXT", "not_null": true },
+        { "name": "position", "type": "INTEGER", "not_null": true },
+        { "name": "created_at", "type": "TEXT", "not_null": true }
+      ]
+    },
+    "cards": {
+      "description": "Individual Kanban cards. Each card belongs to one board and one column; ordering is tracked by position.",
+      "columns": [
+        { "name": "id", "type": "TEXT", "primary_key": true },
+        { "name": "board_id", "type": "TEXT", "not_null": true, "references": "boards.id" },
+        { "name": "column_id", "type": "TEXT", "not_null": true, "references": "board_columns.id" },
+        { "name": "title", "type": "TEXT", "not_null": true },
+        { "name": "details", "type": "TEXT", "not_null": true, "default": "" },
+        { "name": "position", "type": "INTEGER", "not_null": true },
+        { "name": "created_at", "type": "TEXT", "not_null": true },
+        { "name": "updated_at", "type": "TEXT", "not_null": true }
+      ]
+    },
+    "chat_messages": {
+      "description": "Optional future conversation history for the AI sidebar; not required for MVP but included for extension.",
+      "columns": [
+        { "name": "id", "type": "TEXT", "primary_key": true },
+        { "name": "user_id", "type": "TEXT", "not_null": true, "references": "users.id" },
+        { "name": "board_id", "type": "TEXT", "not_null": true, "references": "boards.id" },
+        { "name": "role", "type": "TEXT", "not_null": true },
+        { "name": "content", "type": "TEXT", "not_null": true },
+        { "name": "created_at", "type": "TEXT", "not_null": true }
+      ]
+    }
+  },
+  "relationships": {
+    "users_to_boards": "one user can have many boards (future-ready, but MVP uses one board per user)",
+    "boards_to_columns": "one board has many columns",
+    "board_columns_to_cards": "one column can contain many cards",
+    "cards_to_board": "each card belongs to the board it is displayed on"
+  },
+  "notes": [
+    "Rows are intentionally simple because the MVP only requires a single board and single-user login flow.",
+    "The schema is designed so future multi-user support, multiple boards, and AI chat history can be added without reworking the core model.",
+    "Column and card ordering is stored as integer positions to keep drag-and-drop operations deterministic."
+  ]
+}

@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pm-app
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - pm-data:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  pm-data:
