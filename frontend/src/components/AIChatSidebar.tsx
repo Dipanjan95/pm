@@ -18,12 +18,17 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const conversationRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (conversationRef.current) {
       conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    panelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,11 +73,12 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
 
   return (
     <aside
+      ref={panelRef}
       id="ai-chat-sidebar"
-      className="flex min-h-[520px] flex-col border border-[var(--stroke)] bg-white/95 shadow-[var(--shadow)] xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)]"
+      className="flex flex-col rounded-[32px] border border-[var(--stroke)] bg-white/80 shadow-[var(--shadow)] backdrop-blur"
       aria-label="AI assistant"
     >
-      <header className="flex items-center justify-between border-b border-[var(--stroke)] px-5 py-4">
+      <header className="flex items-center justify-between border-b border-[var(--stroke)] px-8 py-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
             Board assistant
@@ -86,7 +92,7 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
 
       <div
         ref={conversationRef}
-        className="flex-1 space-y-3 overflow-y-auto px-4 py-5"
+        className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto px-8 py-5"
         role="log"
         aria-label="Conversation"
         aria-live="polite"
@@ -97,7 +103,7 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
         {messages.map((item, index) => (
           <div
             key={`${item.role}-${index}`}
-            className={`max-w-[92%] whitespace-pre-wrap break-words px-3 py-2.5 text-sm leading-6 ${
+            className={`max-w-2xl whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-6 ${
               item.role === "user"
                 ? "ml-auto bg-[var(--navy-dark)] text-white"
                 : "border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]"
@@ -113,29 +119,29 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
         ) : null}
       </div>
 
-      <form className="border-t border-[var(--stroke)] p-4" onSubmit={handleSubmit}>
+      <form className="border-t border-[var(--stroke)] px-8 py-5" onSubmit={handleSubmit}>
         {error ? (
           <p className="mb-3 text-sm text-red-700" role="alert">
             {error}
           </p>
         ) : null}
-        <label htmlFor="ai-message" className="sr-only">
-          Message the assistant
-        </label>
-        <textarea
-          id="ai-message"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={2000}
-          rows={3}
-          placeholder="Ask about your board"
-          className="w-full resize-y border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
-        />
-        <div className="mt-3 flex justify-end">
+        <div className="flex items-end gap-3">
+          <label htmlFor="ai-message" className="sr-only">
+            Message the assistant
+          </label>
+          <textarea
+            id="ai-message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            maxLength={2000}
+            rows={2}
+            placeholder="Ask about your board"
+            className="flex-1 resize-none rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+          />
           <button
             type="submit"
             disabled={isSending || !draft.trim()}
-            className="bg-[var(--secondary-purple)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 rounded-2xl bg-[var(--secondary-purple)] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSending ? "Sending..." : "Send"}
           </button>

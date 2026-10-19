@@ -273,22 +273,19 @@ export const KanbanBoard = () => {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className={isChatOpen ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" : ""}>
-            <section className="grid gap-6 lg:grid-cols-5">
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
-                  onRename={handleRenameColumn}
-                  onAddCard={handleAddCard}
-                  onDeleteCard={handleDeleteCard}
-                  onUpdateCard={handleUpdateCard}
-                />
-              ))}
-            </section>
-            {isChatOpen ? <AIChatSidebar onBoardChange={setBoard} /> : null}
-          </div>
+          <section className="grid gap-6 lg:grid-cols-5">
+            {board.columns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
+                onRename={handleRenameColumn}
+                onAddCard={handleAddCard}
+                onDeleteCard={handleDeleteCard}
+                onUpdateCard={handleUpdateCard}
+              />
+            ))}
+          </section>
           <DragOverlay>
             {activeCard ? (
               <div className="w-[260px]">
@@ -297,6 +294,8 @@ export const KanbanBoard = () => {
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {isChatOpen ? <AIChatSidebar onBoardChange={setBoard} /> : null}
       </main>
     </div>
   );
