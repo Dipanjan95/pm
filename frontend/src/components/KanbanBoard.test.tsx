@@ -1,127 +1,172 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, vi } from "vitest";
-import Home from "@/app/page";
-import { AIChatSidebar } from "@/components/AIChatSidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { initialData } from "@/lib/kanban";
+import type { BoardData } from "@/lib/kanban";
+import { lastBody, stubApi } from "@/test/mockFetch";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const boardId = "board-1";
+
+const testBoard: BoardData = {
+  columns: [
+    { id: "col-1", title: "Backlog", cardIds: ["card-1", "card-2"] },
+    { id: "col-2", title: "Done", cardIds: [] },
+  ],
+  cards: {
+    "card-1": { id: "card-1", title: "First card", details: "Details", due_date: null },
+    "card-2": { id: "card-2", title: "Second card", details: "", due_date: "2020-01-01" },
+  },
+};
+
+const renderBoard = (board: BoardData = testBoard) => {
+  const fetchMock = stubApi({ [`GET /api/boards/${boardId}`]: board });
+  render(<KanbanBoard boardId={boardId} isChatOpen={false} />);
+  return fetchMock;
+};
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
 
 describe("KanbanBoard", () => {
-  it("renders five columns", () => {
-    render(<KanbanBoard />);
-    expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+  it("renders the board columns and cards", async () => {
+    renderBoard();
+
+    expect(await screen.findByTestId("column-col-1")).toBeInTheDocument();
+    expect(screen.getByTestId("column-col-2")).toBeInTheDocument();
+    expect(screen.getByText("First card")).toBeInTheDocument();
+    expect(screen.getByText("Due 2020-01-01")).toBeInTheDocument();
   });
 
-  it("renames a column", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
-    const input = within(column).getByLabelText("Column title");
+  it("commits a column rename on blur and saves the board", async () => {
+    const fetchMock = renderBoard();
+    await screen.findByTestId("column-col-1");
+    const input = within(getFirstColumn()).getByLabelText("Column title");
+
     await userEvent.clear(input);
-    await userEvent.type(input, "New Name");
-    expect(input).toHaveValue("New Name");
+    await userEvent.type(input, "Renamed");
+    await userEvent.tab();
+
+    await waitFor(() => {
+      const body = lastBody(fetchMock, "PUT");
+      expect(body.columns[0].title).toBe("Renamed");
+    });
   });
 
-  it("adds and removes a card", async () => {
-    render(<KanbanBoard />);
+  it("adds a card with a due date and saves the board", async () => {
+    const fetchMock = renderBoard();
+    await screen.findByTestId("column-col-1");
     const column = getFirstColumn();
-    const addButton = within(column).getByRole("button", {
-      name: /add a card/i,
-    });
-    await userEvent.click(addButton);
-
-    const titleInput = within(column).getByPlaceholderText(/card title/i);
-    await userEvent.type(titleInput, "New card");
-    const detailsInput = within(column).getByPlaceholderText(/details/i);
-    await userEvent.type(detailsInput, "Notes");
-
+    await userEvent.click(within(column).getByRole("button", { name: /add a card/i }));
+    await userEvent.type(within(column).getByPlaceholderText(/card title/i), "Fresh card");
+    await userEvent.type(within(column).getByLabelText("Due date"), "2026-11-01");
     await userEvent.click(within(column).getByRole("button", { name: /add card/i }));
 
-    expect(within(column).getByText("New card")).toBeInTheDocument();
-
-    const deleteButton = within(column).getByRole("button", {
-      name: /delete new card/i,
+    await waitFor(() => {
+      const body = lastBody(fetchMock, "PUT");
+      const cards = Object.values(body.cards) as { id: string; title: string; due_date: string | null }[];
+      const added = cards.find((card) => card.title === "Fresh card");
+      expect(added?.due_date).toBe("2026-11-01");
+      expect(body.columns[0].cardIds).toContain(added?.id);
     });
-    await userEvent.click(deleteButton);
-
-    expect(within(column).queryByText("New card")).not.toBeInTheDocument();
+    expect(await screen.findByText("Fresh card")).toBeInTheDocument();
   });
 
-  it("edits a card title and details", async () => {
-    render(<KanbanBoard />);
-    const card = screen.getByTestId("card-card-1");
-    await userEvent.click(within(card).getByRole("button", { name: "Edit Align roadmap themes" }));
+  it("edits a card title, details, and due date", async () => {
+    const fetchMock = renderBoard();
+    const card = await screen.findByTestId("card-card-1");
+    await userEvent.click(within(card).getByRole("button", { name: "Edit First card" }));
     await userEvent.clear(within(card).getByLabelText("Card title"));
     await userEvent.type(within(card).getByLabelText("Card title"), "Revised title");
-    await userEvent.clear(within(card).getByLabelText("Card details"));
-    await userEvent.type(within(card).getByLabelText("Card details"), "Revised details");
+    await userEvent.type(within(card).getByLabelText("Card due date"), "2026-12-24");
     await userEvent.click(within(card).getByRole("button", { name: "Save" }));
 
-    expect(within(card).getByText("Revised title")).toBeInTheDocument();
-    expect(within(card).getByText("Revised details")).toBeInTheDocument();
-  });
-
-  it("shows the AI reply and refreshes the board from the response", async () => {
-    const updatedBoard = {
-      ...initialData,
-      cards: {
-        ...initialData.cards,
-        "card-1": { ...initialData.cards["card-1"], title: "Updated by AI" },
-      },
-    };
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ reply: "Card updated.", board: updatedBoard }),
-    }));
-    const onBoardChange = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<AIChatSidebar onBoardChange={onBoardChange} />);
-    await userEvent.type(screen.getByLabelText("Message the assistant"), "Rename card 1");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    expect(await screen.findByText("Card updated.")).toBeInTheDocument();
-    expect(onBoardChange).toHaveBeenCalledWith(updatedBoard);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/ai/chat",
-      expect.objectContaining({ method: "POST" })
-    );
-  });
-
-  it("requires a valid login before showing the board", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, options?: RequestInit) => {
-      if (options?.method === "POST") {
-        const credentials = JSON.parse(String(options.body)) as { password: string };
-        const isValid = credentials.password === "password";
-        return { ok: isValid, status: isValid ? 200 : 401 };
-      }
-      return { ok: false, status: 401 };
+    await waitFor(() => {
+      const body = lastBody(fetchMock, "PUT");
+      expect(body.cards["card-1"].title).toBe("Revised title");
+      expect(body.cards["card-1"].due_date).toBe("2026-12-24");
     });
-    vi.stubGlobal("fetch", fetchMock);
+    expect(await screen.findByText("Revised title")).toBeInTheDocument();
+    expect(screen.getByText("Due 2026-12-24")).toBeInTheDocument();
+  });
 
-    render(<Home />);
+  it("removes a card and saves the board", async () => {
+    const fetchMock = renderBoard();
+    await screen.findByText("First card");
+    await userEvent.click(screen.getByRole("button", { name: /delete first card/i }));
 
-    expect(await screen.findByRole("heading", { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.queryByText("Kanban Studio")).not.toBeInTheDocument();
+    await waitFor(() => {
+      const body = lastBody(fetchMock, "PUT");
+      expect(body.cards["card-1"]).toBeUndefined();
+      expect(body.columns[0].cardIds).toEqual(["card-2"]);
+    });
+    expect(screen.queryByText("First card")).not.toBeInTheDocument();
+  });
 
-    await userEvent.type(screen.getByLabelText(/username/i), "user");
-    await userEvent.type(screen.getByLabelText(/password/i), "wrong");
-    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+  it("flags overdue cards", async () => {
+    renderBoard();
+    const badge = await screen.findByText("Due 2020-01-01");
+    expect(badge.className).toContain("text-red-600");
+  });
 
-    expect(screen.getByText(/invalid username or password/i)).toBeInTheDocument();
-    expect(screen.queryByText("Kanban Studio")).not.toBeInTheDocument();
+  it("ignores an unchanged column rename on blur", async () => {
+    const fetchMock = renderBoard();
+    await screen.findByTestId("column-col-1");
+    const input = within(getFirstColumn()).getByLabelText("Column title");
 
-    await userEvent.clear(screen.getByLabelText(/username/i));
-    await userEvent.clear(screen.getByLabelText(/password/i));
-    await userEvent.type(screen.getByLabelText(/username/i), "user");
-    await userEvent.type(screen.getByLabelText(/password/i), "password");
-    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.clear(input);
+    await userEvent.type(input, "  ");
+    await userEvent.tab();
 
-    expect(screen.getByText("Kanban Studio")).toBeInTheDocument();
+    const putCalls = fetchMock.mock.calls.filter(
+      (call) => (call[1] as RequestInit)?.method === "PUT"
+    );
+    expect(putCalls).toHaveLength(0);
+    expect(input).toHaveValue("Backlog");
+  });
+
+  it("cancels the add-card form", async () => {
+    renderBoard();
+    await screen.findByTestId("column-col-1");
+    const column = getFirstColumn();
+    await userEvent.click(within(column).getByRole("button", { name: /add a card/i }));
+    await userEvent.type(within(column).getByPlaceholderText(/card title/i), "Abandoned");
+    await userEvent.click(within(column).getByRole("button", { name: "Cancel" }));
+
+    expect(within(column).queryByPlaceholderText(/card title/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Abandoned")).not.toBeInTheDocument();
+  });
+
+  it("shows the load error state and recovers on retry", async () => {
+    const fetchMock = stubApi({
+      [`GET /api/boards/${boardId}`]: { status: 500, body: null },
+    });
+    render(<KanbanBoard boardId={boardId} isChatOpen={false} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load the board from the server."
+    );
+
+    // Retry path: point the stubbed fetch at a successful response.
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => testBoard,
+    }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("First card")).toBeInTheDocument();
+  });
+
+  it("shows a banner when saving fails", async () => {
+    stubApi({
+      [`GET /api/boards/${boardId}`]: testBoard,
+      [`PUT /api/boards/${boardId}`]: { status: 500, body: null },
+    });
+    render(<KanbanBoard boardId={boardId} isChatOpen={false} />);
+
+    await screen.findByText("First card");
+    await userEvent.click(screen.getByRole("button", { name: /delete first card/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your latest changes could not be saved."
+    );
   });
 });

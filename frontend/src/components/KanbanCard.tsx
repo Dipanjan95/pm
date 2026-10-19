@@ -2,18 +2,19 @@ import { useState, type FormEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { Card } from "@/lib/kanban";
+import { isOverdue, type Card } from "@/lib/kanban";
 
 type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
-  onUpdate: (cardId: string, title: string, details: string) => void;
+  onUpdate: (cardId: string, title: string, details: string, dueDate: string | null) => void;
 };
 
 export const KanbanCard = ({ card, onDelete, onUpdate }: KanbanCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
+  const [dueDate, setDueDate] = useState(card.due_date);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
 
@@ -28,7 +29,7 @@ export const KanbanCard = ({ card, onDelete, onUpdate }: KanbanCardProps) => {
     if (!nextTitle) {
       return;
     }
-    onUpdate(card.id, nextTitle, details);
+    onUpdate(card.id, nextTitle, details, dueDate);
     setIsEditing(false);
   };
 
@@ -68,6 +69,16 @@ export const KanbanCard = ({ card, onDelete, onUpdate }: KanbanCardProps) => {
                 aria-label="Card details"
               />
             </label>
+            <label className="block text-xs font-semibold text-[var(--gray-text)]">
+              Due date
+              <input
+                type="date"
+                value={dueDate ?? ""}
+                onChange={(event) => setDueDate(event.target.value || null)}
+                className="mt-1 w-full border border-[var(--stroke)] bg-white px-2 py-1 text-sm text-[var(--navy-dark)]"
+                aria-label="Card due date"
+              />
+            </label>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setIsEditing(false)} className="px-2 py-1 text-xs font-semibold text-[var(--gray-text)]">
                 Cancel
@@ -86,6 +97,16 @@ export const KanbanCard = ({ card, onDelete, onUpdate }: KanbanCardProps) => {
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--gray-text)]">
                 {card.details}
               </p>
+              {card.due_date ? (
+                <p
+                  className={clsx(
+                    "mt-2 text-xs font-semibold",
+                    isOverdue(card.due_date) ? "text-red-600" : "text-[var(--gray-text)]"
+                  )}
+                >
+                  Due {card.due_date}
+                </p>
+              ) : null}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <button

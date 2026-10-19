@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { api } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
 
 type ChatMessage = {
@@ -9,11 +10,12 @@ type ChatMessage = {
 };
 
 type AIChatSidebarProps = {
+  boardId: string;
   onBoardChange: (board: BoardData) => void;
 };
 
-export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export const AIChatSidebar = ({ boardId, onBoardChange }: AIChatSidebarProps) => {
+  const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
@@ -30,40 +32,52 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
     panelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    api<ChatMessage[]>(`/api/boards/${boardId}/messages`)
+      .then((history) => {
+        if (isMounted) {
+          setMessages(history);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+        setMessages([]);
+        setError("Unable to load the conversation history.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [boardId]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const message = draft.trim();
-    if (!message || isSending) {
+    if (!message || isSending || messages === null) {
       return;
     }
 
     setDraft("");
     setError("");
-    setMessages((current) => [...current, { role: "user", content: message }]);
+    setMessages((current) => [...(current ?? []), { role: "user", content: message }]);
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/ai/chat", {
+      const result = await api<{ reply: string; board: BoardData }>("/api/ai/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history: messages.slice(-20) }),
+        body: JSON.stringify({ board_id: boardId, message }),
       });
-      const result = (await response.json()) as {
-        reply?: string;
-        board?: BoardData;
-        detail?: string;
-      };
 
-      if (!response.ok) {
-        throw new Error(result.detail || "The assistant could not complete that request.");
-      }
       if (typeof result.reply !== "string" || !result.board?.columns || !result.board.cards) {
         throw new Error("The assistant returned an invalid response.");
       }
 
-      const reply = result.reply;
       onBoardChange(result.board);
-      setMessages((current) => [...current, { role: "assistant", content: reply }]);
+      setMessages((current) => [...(current ?? []), { role: "assistant", content: result.reply }]);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to reach the assistant.");
     } finally {
@@ -97,10 +111,15 @@ export const AIChatSidebar = ({ onBoardChange }: AIChatSidebarProps) => {
         aria-label="Conversation"
         aria-live="polite"
       >
-        {messages.length === 0 ? (
+        {messages === null ? (
+          <p className="text-sm text-[var(--gray-text)]" aria-busy="true">
+            Loading conversation...
+          </p>
+        ) : null}
+        {messages?.length === 0 ? (
           <p className="text-sm text-[var(--gray-text)]">No messages yet.</p>
         ) : null}
-        {messages.map((item, index) => (
+        {messages?.map((item, index) => (
           <div
             key={`${item.role}-${index}`}
             className={`max-w-2xl whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-6 ${

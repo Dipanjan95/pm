@@ -4,11 +4,11 @@ This document breaks the project into implementation phases with explicit checkl
 
 ## Implementation Status
 
-All project parts are implemented and verified. The Docker image builds and runs as a non-root user, board data survives a container restart, and live OpenRouter requests using the configured model succeed.
+All project parts are implemented and verified, including the Part 11 multi-user and multi-board expansion. The Docker image builds and runs as a non-root user, board and chat data survive a container restart, and live OpenRouter requests using the configured model succeed.
 
 ## Settled Product, Technical, and Visual Decisions
 
-- **Product scope:** The MVP uses the hardcoded `user` / `password` credentials, with one Kanban board per user. The backend verifies credentials and issues expiring HttpOnly, SameSite-strict sessions, stored as hashes so logout can revoke them. The data model supports multiple users. The board starts with five columns (Backlog, Discovery, In Progress, Review, Done); column titles and cards are editable, and cards can be moved between columns.
+- **Product scope:** The app supports registered accounts (username 3+ characters, password 8+ characters) plus the seeded demo user. Each user owns multiple boards: create, rename, switch, and delete are supported, and new boards start with five columns (Backlog, Discovery, In Progress, Review, Done). Cards carry an optional due date, highlighted when overdue. The backend verifies credentials, issues expiring HttpOnly, SameSite-strict sessions stored as hashes so logout can revoke them, and scopes every board and chat route to the owning user.
 - **Runtime:** The frontend is a statically exported Next.js app served at `/` by the FastAPI backend. The app runs in one local Docker container, uses `uv` for Python dependencies, and stores data in SQLite, initialized automatically when needed. Start and stop scripts are provided for Windows, macOS, and Linux.
 - **AI:** Backend AI calls use OpenRouter with `liquid/lfm-2.5-2.6b:free`. `OPENROUTER_API_KEY` is supplied through the project-root `.env`. AI requests include the current board and conversation context; structured responses may include validated board changes.
 - **Visual direction:** Keep the existing Kanban Studio direction: Space Grotesk for display text and Manrope for body text. The palette is accent yellow `#ecad0a`, primary blue `#209dd7`, secondary purple `#753991`, dark navy `#032147`, and gray `#888888` for supporting text.
@@ -319,3 +319,35 @@ The MVP is complete when all phases above are checked off and the following are 
 - [x] Live OpenRouter chat answers questions, leaves the board unchanged when requested, and applies explicitly requested structured actions.
 - [x] The UI includes an AI chat sidebar and refreshes after AI board updates.
 - [x] Tests cover the main user flows and backend behavior.
+
+---
+
+## Part 11: Multi-user and multi-board expansion
+
+### Goal
+
+Move beyond the single hardcoded MVP account: registration for new users, multiple boards per user with full CRUD, due dates on cards, per-board persisted AI chat history, and stronger coverage across both stacks.
+
+### Checklist
+
+- [x] Add POST /api/auth/register with validation, a default board per new user, and auto-login; scope all board and AI routes to the owning user.
+- [x] Replace the legacy /api/board routes with RESTful /api/boards CRUD (list, create, detail, rename, full-state save, cascade delete).
+- [x] Add cards.due_date with a startup migration for existing databases; tighten board payload models.
+- [x] Persist AI conversations per board (chat_messages table) and replay them as provider context; serve GET /api/boards/{id}/messages.
+- [x] Frontend: registration flow, Workspace component with board switcher/rename/delete/create, per-board KanbanBoard keyed remount.
+- [x] Frontend: due dates on card forms and cards, overdue highlighting, AIChatSidebar loading persisted history.
+- [x] Column renames commit on blur/Enter instead of saving per keystroke; state loads without seed fixtures; deleted dead routes.
+- [x] Backend tests reorganized (serving, auth, boards, migrations, AI) with pytest-cov; frontend unit and Playwright suites updated.
+
+### Verification
+
+- Backend: 50 pytest tests pass with 100% line coverage on app/main.py.
+- Frontend: 48 Vitest tests pass with ~90% coverage; eslint clean; static export builds.
+- E2E: 8 Playwright tests pass (load, add card with due date, board switch, create, delete with confirm, drag, AI chat with history, registration).
+- Live smoke through the rebuilt container: demo migration intact, register, cross-user 404s, due-date round-trip, rename, delete cascade, logout revocation, live AI chat and a live AI card creation.
+
+### Success criteria
+
+- Users can register, own private boards, and never see another user's board.
+- Board state, due dates, and chat history survive restarts in the existing volume.
+- All previously working flows (drag, edit, AI actions) still pass their suites.
